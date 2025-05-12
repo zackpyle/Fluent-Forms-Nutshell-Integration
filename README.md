@@ -11,14 +11,6 @@ Integrate Fluent Forms with the Nutshell CRM to automatically create leads, cont
 - Supports lead notes with dynamic content
 - Per-form inclusion/exclusion control
 
-## Why Not Use the Official Plugin?
-
-[Nutshell Analytics](https://wordpress.org/plugins/nutshell-analytics/) is the official plugin provided by Nutshell. It adds analytics tracking and can automatically create leads from form submissions by intercepting form fills. However:
-
-- It does not support assigning leads to specific users based on form inputs or page URLs.
-- It does not support assigning leads to pipelines or customizing lead creation behavior.
-- Field mapping is only available through the Nutshell UI and offers limited control.
-
 ## Why Choose This Plugin Over the Official One?
 
 [Nutshell Analytics](https://wordpress.org/plugins/nutshell-analytics/) is the official plugin provided by Nutshell. It enables basic lead creation by intercepting form fills and activating analytics tracking. While it's quick to set up, it has limited customization:
