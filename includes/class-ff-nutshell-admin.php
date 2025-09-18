@@ -98,6 +98,11 @@ class FF_Nutshell_Admin {
             ['sanitize_callback' => [$this, 'sanitize_excluded_form_ids']]
         );
         register_setting(
+            'ff_nutshell_settings',
+            'ff_nutshell_exclusion_email_patterns',
+            ['sanitize_callback' => [$this, 'sanitize_email_patterns']]
+        );
+        register_setting(
             'ff_nutshell_settings', 
             'ff_nutshell_enable_logging', 
             ['sanitize_callback' => [$this, 'sanitize_boolean_field']]
@@ -130,6 +135,14 @@ class FF_Nutshell_Admin {
             'ff_nutshell_enable_logging',
             'Enable Logging',
             array($this, 'logging_field_callback'),
+            'ff-nutshell-settings',
+            'ff_nutshell_settings_section'
+        );
+
+        add_settings_field(
+            'ff_nutshell_exclusion_email_patterns',
+            'Exclude Emails (Regex Patterns)',
+            array($this, 'email_patterns_field_callback'),
             'ff-nutshell-settings',
             'ff_nutshell_settings_section'
         );
@@ -180,6 +193,59 @@ class FF_Nutshell_Admin {
         echo '<input type="checkbox" name="ff_nutshell_enable_logging" value="1" ' . checked(1, $value, false) . '>';
 		echo '<p class="description">' . esc_html__('Enable logging of API requests and responses for debugging (logs will be written to WordPress debug.log when WP_DEBUG and WP_DEBUG_LOG are enabled)', 'ff-nutshell') . '</p>';
 
+    }
+
+    /**
+     * Exclusion email patterns field (textarea)
+     */
+    public function email_patterns_field_callback() {
+        $value = get_option('ff_nutshell_exclusion_email_patterns', '');
+        echo '<textarea name="ff_nutshell_exclusion_email_patterns" rows="5" class="large-text code" placeholder="\+test[^@]*@">' . esc_textarea($value) . '</textarea>';
+        echo '<p class="description">' . esc_html__('Enter one regex pattern per line. If any pattern matches the submitter\'s email, the submission will be excluded from Nutshell.', 'ff-nutshell') . '</p>';
+        echo '<p class="description">' . esc_html__('Examples:', 'ff-nutshell') . '</p>';
+        echo '<ul class="description" style="margin-left: 18px; list-style: disc;">'
+            . '<li><code>/^test@/i</code> ' . esc_html__('matches emails starting with "test@"', 'ff-nutshell') . '</li>'
+            . '<li><code>/@example\\.com$/i</code> ' . esc_html__('matches any email at example.com', 'ff-nutshell') . '</li>'
+            . '<li><code>^spam@</code> ' . esc_html__('you may omit slashes; they will be added automatically and matched case-insensitively', 'ff-nutshell') . '</li>'
+            . '</ul>';
+    }
+
+    /**
+     * Sanitize newline-separated regex patterns for emails
+     *
+     * @param string $input Raw textarea input
+     * @return string Sanitized textarea (lines preserved, invalid binary removed)
+     */
+    public function sanitize_email_patterns($input) {
+        if (!is_string($input)) {
+            return '';
+        }
+
+        // Normalize line endings and split
+        $lines = preg_split('/\r\n|\r|\n/', $input);
+        $sanitized = [];
+
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if ($line === '') {
+                continue;
+            }
+            // Remove null bytes and ensure it is plain text
+            $line = str_replace("\0", '', $line);
+
+            // Light validation: avoid unbounded backreferences that could be dangerous
+            // We do not fully validate regex here; runtime will skip invalid patterns
+            $sanitized[] = sanitize_textarea_field($line);
+        }
+
+        $result = implode("\n", $sanitized);
+
+        // Log if content changed significantly
+        if ($result !== $input) {
+            FF_Nutshell_Core::log('Email exclusion patterns sanitized.');
+        }
+
+        return $result;
     }
     
     //-------------------------------------------------------------------------

@@ -84,8 +84,7 @@ class FF_Nutshell_API {
 			}
 		}
 
-		// Log what we're sending
-		FF_Nutshell_Core::log('Lead payload: ' . json_encode($payload, JSON_PRETTY_PRINT));
+		// FF_Nutshell_Core::log('Lead payload: ' . json_encode($payload, JSON_PRETTY_PRINT)); // Verbose; commented to reduce log noise
 
 		// Make the API request
 		return $this->make_request('leads', $payload, 'POST');
@@ -206,8 +205,7 @@ class FF_Nutshell_API {
 			$payload['contacts'][0]['phones'] = $contact_data['phones'];
 		}
 
-		// Log what we're sending to help with debugging
-		FF_Nutshell_Core::log('Contact payload: ' . json_encode($payload, JSON_PRETTY_PRINT));
+		// FF_Nutshell_Core::log('Contact payload: ' . json_encode($payload, JSON_PRETTY_PRINT)); // Verbose; commented to reduce log noise
 
 		// Make the API request
 		$response = $this->make_request('contacts', $payload, 'POST');
@@ -397,7 +395,7 @@ class FF_Nutshell_API {
 			'accounts' => [$account_data]
 		];
 
-		FF_Nutshell_Core::log('Account payload: ' . json_encode($payload, JSON_PRETTY_PRINT));
+		// FF_Nutshell_Core::log('Account payload: ' . json_encode($payload, JSON_PRETTY_PRINT)); // Verbose; commented to reduce log noise
 
 		$response = $this->make_request('accounts', $payload, 'POST');
 
@@ -662,7 +660,7 @@ class FF_Nutshell_API {
 			'body' => isset($args['body']) ? $this->redact_sensitive_data(json_decode($args['body'], true)) : null,
 		];
 
-		FF_Nutshell_Core::log('API REQUEST: ' . wp_json_encode($log_request, JSON_PRETTY_PRINT));
+		// FF_Nutshell_Core::log('API REQUEST: ' . wp_json_encode($log_request, JSON_PRETTY_PRINT)); // Very verbose; commented to reduce log noise
 
 		// Make the API request
 		$response = wp_remote_request($url, $args);
@@ -689,7 +687,7 @@ class FF_Nutshell_API {
 			'body' => $this->redact_sensitive_data(json_decode($body, true)),
 		];
 
-		FF_Nutshell_Core::log('API RESPONSE: ' . wp_json_encode($log_response, JSON_PRETTY_PRINT));
+		// FF_Nutshell_Core::log('API RESPONSE: ' . wp_json_encode($log_response, JSON_PRETTY_PRINT)); // Very verbose; commented to reduce log noise
 
 		// Check response code
 		if ($code < 200 || $code >= 300) {

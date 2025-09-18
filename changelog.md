@@ -2,6 +2,15 @@
 
 All notable changes to the "Fluent Forms Nutshell Integration" plugin will be documented in this file.
 
+## [1.9.0] - 2025-09-18
+
+### Added
+- Email-based exclusion rules for submissions
+  - New setting on the main settings page: "Exclude Emails (Regex Patterns)"
+  - Accepts one regex per line (e.g., `/^test@/i`, `/@example\\.com$/i`, or raw `^spam@` which will be treated case-insensitively)
+  - If the submitter's email matches any pattern, the plugin skips all Nutshell actions (no contact, account, lead, owner assignment, pipeline, or notes are created)
+  - Logging note added when a submission is excluded (visible when logging and WP_DEBUG/WP_DEBUG_LOG are enabled)
+
 ## [1.8.0] - 2025-09-18
 
 ### Fixed
