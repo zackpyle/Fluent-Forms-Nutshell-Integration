@@ -1278,23 +1278,28 @@ class FF_Nutshell_Admin {
      * @return array Sanitized mapping data
      */
     private function sanitize_mapping_data($data) {
-        if (!is_array($data)) {
-            return sanitize_text_field($data);
-        }
-        
-        $sanitized = [];
-        foreach ($data as $key => $value) {
-            $sanitized_key = sanitize_text_field($key);
-            
-            if (is_array($value)) {
-                $sanitized[$sanitized_key] = $this->sanitize_mapping_data($value);
-            } else {
-                $sanitized[$sanitized_key] = sanitize_text_field($value);
-            }
-        }
-        
-        return $sanitized;
-    }
+		if (!is_array($data)) {
+			return sanitize_text_field($data);
+		}
+
+		$sanitized = [];
+		foreach ($data as $key => $value) {
+			$sanitized_key = sanitize_text_field($key);
+
+			if (is_array($value)) {
+				$sanitized[$sanitized_key] = $this->sanitize_mapping_data($value);
+			} else {
+				// Special handling for textarea content that should preserve line breaks
+				if ($sanitized_key === 'note_template') {
+					$sanitized[$sanitized_key] = sanitize_textarea_field($value);
+				} else {
+					$sanitized[$sanitized_key] = sanitize_text_field($value);
+				}
+			}
+		}
+
+		return $sanitized;
+	}
     
     /**
      * Sanitize API username (email)

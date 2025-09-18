@@ -146,6 +146,11 @@ class FF_Nutshell_Form_Handler {
 			$this->field_mapper->load_field_mappings($form->id);
 			$mapping = $this->field_mapper->get_field_mappings($form->id);
 
+			// Store agent information for later use
+			$agent_email = null;
+			$agent_name = null;
+			$owner_id = null;
+
 			// 1. Prepare contact data if available
 			FF_Nutshell_Core::log('Preparing contact data...');
 			$contact_data = $this->field_mapper->get_contact_data($form_data, $form->id);
@@ -153,7 +158,16 @@ class FF_Nutshell_Form_Handler {
 
 			if (!empty($contact_data['name']) && !empty($contact_data['emails'])) {
 				FF_Nutshell_Core::log('Contact data valid, finding or creating contact...');
-				$contact_id = $this->api->find_or_create_contact($contact_data);
+				// First check if we have an agent email to use for contact ownership
+				$owner_id = null;
+				if (isset($form_data['agent_email']) && !empty($form_data['agent_email'])) {
+					$agent_email = sanitize_email($form_data['agent_email']);
+					$owner_id = $this->api->find_user_by_email($agent_email);
+					if ($owner_id) {
+						FF_Nutshell_Core::log('DEBUG - Using agent email for contact ownership: ' . $agent_email . ' with ID: ' . $owner_id);
+					}
+				}
+				$contact_id = $this->api->find_or_create_contact($contact_data, $owner_id);
 				FF_Nutshell_Core::log('Contact ID: ' . ($contact_id ? $contact_id : 'not created'));
 			} else {
 				FF_Nutshell_Core::log('Invalid contact data: ' . json_encode($contact_data));
@@ -182,42 +196,66 @@ class FF_Nutshell_Form_Handler {
 				FF_Nutshell_Core::log('Added account ' . $account_id . ' to lead links');
 			}
 
-			// 5. Agent Assignment
+			// 5. Agent Assignment - UPDATED to capture agent information with enhanced logging
 			$owner_assigned = false;
+			$agent_email = '';
+			$agent_name = '';
+
+			// Dump all form data keys for debugging
+			$form_keys = array_keys($form_data);
+			FF_Nutshell_Core::log('DEBUG - Available form fields: ' . implode(', ', $form_keys));
 
 			// First check for direct agent_email in form data (from hidden field)
 			if (isset($form_data['agent_email']) && !empty($form_data['agent_email'])) {
-				FF_Nutshell_Core::log('Form has agent_email field: ' . $form_data['agent_email']);
-				$owner_id = $this->api->find_user_by_email($form_data['agent_email']);
+				$agent_email = sanitize_email($form_data['agent_email']);
+				FF_Nutshell_Core::log('DEBUG - Form has agent_email field: ' . $agent_email);
+				
+				// Store agent name if available
+				if (isset($form_data['agent_name']) && !empty($form_data['agent_name'])) {
+					$agent_name = sanitize_text_field($form_data['agent_name']);
+					FF_Nutshell_Core::log('DEBUG - Form has agent_name field: ' . $agent_name);
+				}
+				
+				// Log before API call
+				FF_Nutshell_Core::log('DEBUG - About to search for user with email: ' . $agent_email);
+				
+				$owner_id = $this->api->find_user_by_email($agent_email);
+				
+				// Log API response
 				if ($owner_id) {
-					FF_Nutshell_Core::log('Found owner ID: ' . $owner_id . ' for email: ' . $form_data['agent_email']);
+					FF_Nutshell_Core::log('DEBUG - Found owner ID: ' . $owner_id . ' for email: ' . $agent_email);
+					FF_Nutshell_Core::log('DEBUG - Setting lead_data["links"]["owner"] = ' . $owner_id);
 					$lead_data['links']['owner'] = $owner_id;
 					$owner_assigned = true;
 				} else {
-					FF_Nutshell_Core::log('Could not find owner for email: ' . $form_data['agent_email']);
+					FF_Nutshell_Core::log('DEBUG - Could not find owner for email: ' . $agent_email . ' - Check if this email exists in Nutshell');
 				}
+			} else {
+				FF_Nutshell_Core::log('DEBUG - No agent_email field found in form data');
 			}
 
 			// If no direct agent email, check for agent field mapping
 			if (!$owner_assigned && !empty($mapping['agent_id_field']) && isset($form_data[$mapping['agent_id_field']])) {
 				$agent_value = $form_data[$mapping['agent_id_field']];
-				FF_Nutshell_Core::log('Using mapped agent field: ' . $mapping['agent_id_field'] . ' with value: ' . $agent_value);
+				FF_Nutshell_Core::log('DEBUG - Using mapped agent field: ' . $mapping['agent_id_field'] . ' with value: ' . $agent_value);
 
 				// Is this an email or an ID?
 				if (filter_var($agent_value, FILTER_VALIDATE_EMAIL)) {
 					// It's an email, look up the ID
-					$owner_id = $this->api->find_user_by_email($agent_value);
+					$agent_email = sanitize_email($agent_value);
+					$owner_id = $this->api->find_user_by_email($agent_email);
 					if ($owner_id) {
-						FF_Nutshell_Core::log('Found owner ID: ' . $owner_id . ' for mapped email: ' . $agent_value);
+						FF_Nutshell_Core::log('Found owner ID: ' . $owner_id . ' for mapped email: ' . $agent_email);
 						$lead_data['links']['owner'] = $owner_id;
 						$owner_assigned = true;
 					} else {
-						FF_Nutshell_Core::log('Could not find owner for mapped email: ' . $agent_value);
+						FF_Nutshell_Core::log('Could not find owner for mapped email: ' . $agent_email);
 					}
 				} else {
 					// Assume it's a direct ID
 					FF_Nutshell_Core::log('Using direct owner ID: ' . $agent_value);
-					$lead_data['links']['owner'] = $agent_value;
+					$owner_id = $agent_value;
+					$lead_data['links']['owner'] = $owner_id;
 					$owner_assigned = true;
 				}
 			}
@@ -225,16 +263,41 @@ class FF_Nutshell_Form_Handler {
 			// If no agent assigned yet, use default owner if set
 			if (!$owner_assigned && !empty($mapping['default_owner'])) {
 				FF_Nutshell_Core::log('Using default owner: ' . $mapping['default_owner']);
-				$lead_data['links']['owner'] = $mapping['default_owner'];
+				$owner_id = $mapping['default_owner'];
+				$lead_data['links']['owner'] = $owner_id;
 				$owner_assigned = true;
 			}
 
-			// 6. Create the lead
-			$result = $this->api->create_lead($lead_data);
+			// 6. Create the lead in Nutshell
+			// Log the final lead data before creating
+			FF_Nutshell_Core::log('DEBUG - Final lead data before API call: ' . json_encode($lead_data));
+			
+			$response = $this->api->create_lead($lead_data);
+			
+			if (!$response['success']) {
+				FF_Nutshell_Core::log('Failed to create lead: ' . json_encode($response));
+				return;
+			}
+			
+			$lead_id = $response['data']['leads'][0]['id'] ?? null;
+			
+			if (!$lead_id) {
+				FF_Nutshell_Core::log('Lead created but could not find ID in response');
+				return;
+			}
+			
+			FF_Nutshell_Core::log('Created lead with ID: ' . $lead_id);
+			
+			// Log the owner assignment status
+			if ($owner_assigned) {
+				FF_Nutshell_Core::log('DEBUG - Lead assigned to agent: ' . $agent_email);
+			} else {
+				FF_Nutshell_Core::log('DEBUG - Lead not assigned to any specific agent');
+			}
 
 			// 7. If lead creation was successful and we need to assign a stageset (pipeline)
-			if ($result['success'] && !empty($result['data']['leads'][0]['id'])) {
-				$lead_id = $result['data']['leads'][0]['id'];
+			if ($response['success'] && !empty($response['data']['leads'][0]['id'])) {
+				$lead_id = $response['data']['leads'][0]['id'];
 				$stageset_id = null;
 
 				// Determine stageset ID based on mapping type
@@ -263,9 +326,9 @@ class FF_Nutshell_Form_Handler {
 				}
 			}
 
-			// 8. Create a note if configured
-			if ($result['success'] && !empty($result['data']['leads'][0]['id'])) {
-				$lead_id = $result['data']['leads'][0]['id'];
+			// 8. Create a note if configured - UPDATED to include agent attribution
+			if ($response['success'] && !empty($response['data']['leads'][0]['id'])) {
+				$lead_id = $response['data']['leads'][0]['id'];
 				$note_content = null;
 
 				// Determine note content based on mapping type
@@ -279,18 +342,24 @@ class FF_Nutshell_Form_Handler {
 					}
 				}
 
-				// Create note if we have content
+				// Add agent attribution to note if we have agent info
 				if (!empty($note_content)) {
+					// Add agent attribution if we have agent information
+					if (!empty($agent_name) || !empty($agent_email)) {
+						$agent_info = !empty($agent_name) ? $agent_name : $agent_email;
+						$note_content = "Lead submitted via " . $agent_info . "'s contact form.\n\n" . $note_content;
+					}
+					
 					$this->api->create_lead_note($lead_id, $note_content);
 				}
 			}
 
 			// 9. Log the result - updated to use WordPress debug log
 			if ($this->logging_enabled) {
-				FF_Nutshell_Core::log('Lead creation result: ' . ($result['success'] ? 'SUCCESS' : 'FAILED'));
+				FF_Nutshell_Core::log('Lead creation result: ' . ($response['success'] ? 'SUCCESS' : 'FAILED'));
 			}
 
-			return $result;
+			return $response;
 
 		} catch (Exception $e) {
 			FF_Nutshell_Core::log('Exception: ' . $e->getMessage());

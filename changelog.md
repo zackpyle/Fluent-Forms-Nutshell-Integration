@@ -2,6 +2,18 @@
 
 All notable changes to the "Fluent Forms Nutshell Integration" plugin will be documented in this file.
 
+## [1.8.0] - 2025-09-18
+
+### Fixed
+- More reliable agent→owner mapping
+  - Sanitize and reuse `agent_email`, consistently track `owner_id`
+- Safer lead creation flow and note attribution
+  - Use response with explicit success checks, defensive `lead_id` extraction, final payload and created ID logging, and prepend agent attribution to notes when available
+- Support owner on contact create/find
+  - Add optional `owner_id` to `create_contact` and `find_or_create_contact` and set `links.owner` in the request payload
+- Preserve note template line breaks in admin
+  - Use `sanitize_textarea_field` specifically for `note_template` within `sanitize_mapping_data` to preserve newlines
+
 ## [1.7.0] - 2025-05-10
 
 ### Added

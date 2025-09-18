@@ -172,9 +172,10 @@ class FF_Nutshell_API {
 	 * Create a contact in Nutshell
 	 * 
 	 * @param array $contact_data Contact data formatted for Nutshell API
+	 * @param string|null $owner_id Optional owner ID to assign to the contact
 	 * @return string|null Contact ID if created, null on error
 	 */
-	public function create_contact($contact_data) {
+	public function create_contact($contact_data, $owner_id = null) {
 		// Check if we have the minimum required data
 		if (empty($contact_data['name']) || empty($contact_data['emails'])) {
 			FF_Nutshell_Core::log('Cannot create contact: missing name or email');
@@ -191,6 +192,14 @@ class FF_Nutshell_API {
 				]
 			]
 		];
+		
+		// Add owner if provided
+		if (!empty($owner_id)) {
+			FF_Nutshell_Core::log('Setting contact owner to: ' . $owner_id);
+			$payload['contacts'][0]['links'] = [
+				'owner' => $owner_id
+			];
+		}
 
 		// Add phones if set
 		if (!empty($contact_data['phones']) && is_array($contact_data['phones'])) {
@@ -225,9 +234,10 @@ class FF_Nutshell_API {
      * Find or create a contact in Nutshell
      * 
      * @param array $contact_data Contact data formatted for Nutshell API
+     * @param string|null $owner_id Optional owner ID to assign to the contact
      * @return string|null Contact ID if found or created, null on error
      */
-	public function find_or_create_contact($contact_data) {
+	public function find_or_create_contact($contact_data, $owner_id = null) {
 		FF_Nutshell_Core::log('Starting find_or_create_contact');
 
 		// Check if contact has email
@@ -249,8 +259,8 @@ class FF_Nutshell_API {
 		}
 
 		FF_Nutshell_Core::log('No existing contact found, creating new one');
-		// If not found, create new contact
-		return $this->create_contact($contact_data);
+		// If not found, create new contact with owner if provided
+		return $this->create_contact($contact_data, $owner_id);
 	}
 	
 	/**
