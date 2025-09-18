@@ -10,6 +10,7 @@ Integrate Fluent Forms with the Nutshell CRM to automatically create leads, cont
 - Select or dynamically assign pipelines
 - Supports lead notes with dynamic content
 - Per-form inclusion/exclusion control
+- Global email-based exclusion using RegEx
 
 ## Why Choose This Plugin Over the Official One?
 
