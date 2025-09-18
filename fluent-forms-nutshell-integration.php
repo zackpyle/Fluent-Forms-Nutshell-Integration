@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Fluent Forms Nutshell Integration
  * Description: Integrates Fluent Forms with Nutshell CRM via REST API
- * Version: 1.8.0
+ * Version: 1.9.0
  * Author: PYLE/DIGITAL
  * Text Domain: ff-nutshell
  * Requires PHP: 7.2
@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 // Define plugin constants
-define('FF_NUTSHELL_VERSION', '1.8.0');
+define('FF_NUTSHELL_VERSION', '1.9.0');
 define('FF_NUTSHELL_PATH', plugin_dir_path(__FILE__));
 define('FF_NUTSHELL_URL', plugin_dir_url(__FILE__));
 define('FF_NUTSHELL_MIN_PHP_VERSION', '7.2');
@@ -99,6 +99,11 @@ function ff_nutshell_activate() {
     
     if (!get_option('ff_nutshell_enable_logging')) {
         add_option('ff_nutshell_enable_logging', false);
+    }
+
+    // Initialize email exclusion patterns (newline-separated regex list)
+    if (get_option('ff_nutshell_exclusion_email_patterns', null) === null) {
+        add_option('ff_nutshell_exclusion_email_patterns', '');
     }
 }
 

@@ -38,6 +38,48 @@ class FF_Nutshell_Form_Handler {
 		$this->excluded_form_ids = !empty($excluded_form_ids) ? array_map('trim', explode(',', $excluded_form_ids)) : [];
 		$this->logging_enabled = get_option('ff_nutshell_enable_logging', false);
 	}
+
+	/**
+	 * Check if an email matches any exclusion patterns from settings
+	 *
+	 * @param string $email Submitter email
+	 * @return bool True if should be excluded
+	 */
+	private function email_matches_exclusion($email) {
+		$patterns_raw = get_option('ff_nutshell_exclusion_email_patterns', '');
+		if (empty($patterns_raw)) {
+			return false;
+		}
+
+		$lines = preg_split('/\r\n|\r|\n/', $patterns_raw);
+		$email = strtolower(trim($email));
+
+		foreach ($lines as $line) {
+			$pattern = trim($line);
+			if ($pattern === '') {
+				continue;
+			}
+
+			// Allow patterns with or without delimiters; default to case-insensitive
+			if ($pattern[0] === '/') {
+				// Already delimited (may include flags like /.../i)
+				$regex = $pattern;
+			} else {
+				// No delimiters provided; wrap and make case-insensitive
+				$regex = '/' . str_replace('/', '\/', $pattern) . '/i';
+			}
+
+			// Validate regex; suppress warnings using @ and check for false
+			$matched = @preg_match($regex, $email);
+			if ($matched === 1) {
+				return true;
+			} elseif ($matched === false) {
+				FF_Nutshell_Core::log('Invalid email exclusion regex skipped: ' . $pattern);
+			}
+		}
+
+		return false;
+	}
     
 	/**
 	 * Process form submission with debugging
@@ -155,6 +197,19 @@ class FF_Nutshell_Form_Handler {
 			FF_Nutshell_Core::log('Preparing contact data...');
 			$contact_data = $this->field_mapper->get_contact_data($form_data, $form->id);
 			$contact_id = null;
+
+			// Email-based exclusion check: if submitter email matches any configured pattern, skip creating a lead
+			$submitter_email = '';
+			if (!empty($contact_data['emails']) && isset($contact_data['emails'][0]['value'])) {
+				$submitter_email = sanitize_email($contact_data['emails'][0]['value']);
+			}
+			if (!empty($submitter_email) && $this->email_matches_exclusion($submitter_email)) {
+				FF_Nutshell_Core::log('Submission excluded by email pattern: ' . $submitter_email . '. Skipping Nutshell lead creation.');
+				return [
+					'success' => true,
+					'message' => 'Submission excluded by email rules'
+				];
+			}
 
 			if (!empty($contact_data['name']) && !empty($contact_data['emails'])) {
 				FF_Nutshell_Core::log('Contact data valid, finding or creating contact...');
