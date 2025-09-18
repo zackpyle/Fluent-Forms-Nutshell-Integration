@@ -200,7 +200,7 @@ class FF_Nutshell_Admin {
      */
     public function email_patterns_field_callback() {
         $value = get_option('ff_nutshell_exclusion_email_patterns', '');
-        echo '<textarea name="ff_nutshell_exclusion_email_patterns" rows="5" class="large-text code" placeholder="/^test@/i\n/\\.example\\.com$/i">' . esc_textarea($value) . '</textarea>';
+        echo '<textarea name="ff_nutshell_exclusion_email_patterns" rows="5" class="large-text code" placeholder="\+test[^@]*@">' . esc_textarea($value) . '</textarea>';
         echo '<p class="description">' . esc_html__('Enter one regex pattern per line. If any pattern matches the submitter\'s email, the submission will be excluded from Nutshell.', 'ff-nutshell') . '</p>';
         echo '<p class="description">' . esc_html__('Examples:', 'ff-nutshell') . '</p>';
         echo '<ul class="description" style="margin-left: 18px; list-style: disc;">'

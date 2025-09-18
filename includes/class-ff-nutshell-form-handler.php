@@ -256,9 +256,9 @@ class FF_Nutshell_Form_Handler {
 			$agent_email = '';
 			$agent_name = '';
 
-			// Dump all form data keys for debugging
-			$form_keys = array_keys($form_data);
-			FF_Nutshell_Core::log('DEBUG - Available form fields: ' . implode(', ', $form_keys));
+			// Dump all form data keys for debugging (verbose)
+			// $form_keys = array_keys($form_data);
+			// FF_Nutshell_Core::log('DEBUG - Available form fields: ' . implode(', ', $form_keys));
 
 			// First check for direct agent_email in form data (from hidden field)
 			if (isset($form_data['agent_email']) && !empty($form_data['agent_email'])) {
@@ -324,8 +324,7 @@ class FF_Nutshell_Form_Handler {
 			}
 
 			// 6. Create the lead in Nutshell
-			// Log the final lead data before creating
-			FF_Nutshell_Core::log('DEBUG - Final lead data before API call: ' . json_encode($lead_data));
+			// FF_Nutshell_Core::log('DEBUG - Final lead data before API call: ' . json_encode($lead_data)); // Verbose; commented to reduce log noise
 			
 			$response = $this->api->create_lead($lead_data);
 			
