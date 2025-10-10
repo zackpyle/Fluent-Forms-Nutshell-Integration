@@ -353,6 +353,60 @@ class FF_Nutshell_API {
 		FF_Nutshell_Core::log('No stageset found for ID: ' . $stageset_id . ' even after cache refresh');
 		return false;
 	}
+	
+	/**
+	 * Find a stageset (pipeline) by name with cache auto-refresh and unique match requirement
+	 *
+	 * @param string $name Stageset name to search for
+	 * @return string|null ID if a unique case-insensitive match is found, null otherwise
+	 */
+	public function find_stageset_by_name($name) {
+		if (empty($name)) {
+			return null;
+		}
+
+		$needle = strtolower(trim($name));
+		FF_Nutshell_Core::log('Looking for stageset by name: ' . $needle);
+
+		$resolve_from_list = function($stagesets, $needle) {
+			$matches = [];
+			foreach ($stagesets as $stageset) {
+				// Support different structures: name/title and id/_id
+				$label = isset($stageset['name']) ? $stageset['name'] : (isset($stageset['title']) ? $stageset['title'] : '');
+				$id = isset($stageset['id']) ? $stageset['id'] : (isset($stageset['_id']) ? $stageset['_id'] : '');
+				if ($label !== '' && $id !== '' && strtolower(trim($label)) === $needle) {
+					$matches[] = $id;
+				}
+			}
+			// Only return on a unique match
+			if (count($matches) === 1) {
+				return $matches[0];
+			}
+			return null;
+		};
+
+		// Try from cache first
+		$stagesets = $this->get_stagesets_with_cache(false);
+		$id = $resolve_from_list($stagesets, $needle);
+		if (!empty($id)) {
+			FF_Nutshell_Core::log('Found stageset by name in cache: ' . $id);
+			return $id;
+		}
+
+		// If not found, force refresh and try again
+		if (count($stagesets) > 0) {
+			FF_Nutshell_Core::log('Stageset not found by name in cache, forcing refresh');
+			$stagesets = $this->get_stagesets_with_cache(true);
+			$id = $resolve_from_list($stagesets, $needle);
+			if (!empty($id)) {
+				FF_Nutshell_Core::log('Found stageset by name after refresh: ' . $id);
+				return $id;
+			}
+		}
+
+		FF_Nutshell_Core::log('No unique stageset match for name: ' . $needle);
+		return null;
+	}
     
     /**
      * Find an account by name

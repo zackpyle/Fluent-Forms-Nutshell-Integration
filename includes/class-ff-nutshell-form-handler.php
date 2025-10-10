@@ -352,32 +352,50 @@ class FF_Nutshell_Form_Handler {
 			// 7. If lead creation was successful and we need to assign a stageset (pipeline)
 			if ($response['success'] && !empty($response['data']['leads'][0]['id'])) {
 				$lead_id = $response['data']['leads'][0]['id'];
-				$stageset_id = null;
+				$stageset_candidate = null;
+				$resolved_stageset_id = null;
 
-				// Determine stageset ID based on mapping type
+				// Determine candidate based on mapping type
 				if (isset($mapping['stageset_type'])) {
 					if ($mapping['stageset_type'] === 'fixed' && !empty($mapping['stageset_id'])) {
-						// Use fixed stageset ID
-						$stageset_id = $mapping['stageset_id'];
+						$stageset_candidate = $mapping['stageset_id'];
+						FF_Nutshell_Core::log('Stageset mapping: using fixed candidate: ' . $stageset_candidate);
 					} else if ($mapping['stageset_type'] === 'field' && !empty($mapping['stageset_field'])) {
-						// Get stageset ID from form field
 						$field_value = $this->field_mapper->get_field_value($form_data, $mapping['stageset_field']);
 						if (!empty($field_value)) {
-							$stageset_id = $field_value;
+							$stageset_candidate = $field_value;
+							FF_Nutshell_Core::log('Stageset mapping: using field candidate from ' . $mapping['stageset_field'] . ': ' . $stageset_candidate);
 						}
 					}
 				}
 
-				// Assign stageset if we determined an ID, but first validate it exists
-				if (!empty($stageset_id)) {
-					// Check if the stageset ID exists in Nutshell (with cache refresh if needed)
-					if ($this->api->find_stageset_by_id($stageset_id)) {
-						FF_Nutshell_Core::log('Assigning lead to verified stageset ID: ' . $stageset_id);
-						$this->api->set_lead_stageset($lead_id, $stageset_id);
+				// Resolution order: direct ID -> name lookup -> fallback to '1-stagesets'
+				if (!empty($stageset_candidate)) {
+					// Try as ID
+					if ($this->api->find_stageset_by_id($stageset_candidate)) {
+						$resolved_stageset_id = $stageset_candidate;
+						FF_Nutshell_Core::log('Stageset resolution: candidate is a valid ID: ' . $resolved_stageset_id);
 					} else {
-						FF_Nutshell_Core::log('Warning: Stageset ID: ' . $stageset_id . ' not found in Nutshell, skipping assignment');
+						// Try by name (unique, case-insensitive)
+						$by_name_id = $this->api->find_stageset_by_name($stageset_candidate);
+						if (!empty($by_name_id)) {
+							$resolved_stageset_id = $by_name_id;
+							FF_Nutshell_Core::log('Stageset resolution: resolved by name to ID: ' . $resolved_stageset_id);
+						} else {
+							FF_Nutshell_Core::log('Stageset resolution: no match for candidate "' . $stageset_candidate . '" by ID or name. Falling back to Default (1-stagesets)');
+						}
 					}
 				}
+
+				// Apply fallback if still not resolved
+				if (empty($resolved_stageset_id)) {
+					$resolved_stageset_id = '1-stagesets';
+					FF_Nutshell_Core::log('Stageset resolution: using fallback stageset ID: ' . $resolved_stageset_id);
+				}
+
+				// Assign stageset
+				FF_Nutshell_Core::log('Assigning lead ' . $lead_id . ' to stageset: ' . $resolved_stageset_id);
+				$this->api->set_lead_stageset($lead_id, $resolved_stageset_id);
 			}
 
 			// 8. Create a note if configured - UPDATED to include agent attribution
