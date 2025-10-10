@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Fluent Forms Nutshell Integration
  * Description: Integrates Fluent Forms with Nutshell CRM via REST API
- * Version: 1.9.0
+ * Version: 1.10.0
  * Author: PYLE/DIGITAL
  * Text Domain: ff-nutshell
  * Requires PHP: 7.2
