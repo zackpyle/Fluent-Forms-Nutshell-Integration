@@ -139,8 +139,13 @@ class FF_Nutshell_Form_Handler {
 		// Sanitize form response data recursively before processing
 		$response = $this->sanitize_form_data($response);
 
-		// Create lead in Nutshell
-		$this->create_lead($response, $form);
+		// Create lead in Nutshell and capture result
+		$result = $this->create_lead($response, $form);
+
+		// If we have a result, attempt to add a note to the Fluent Forms entry
+		if (is_array($result)) {
+			$this->add_submission_note($entry_id, $form_id, $result);
+		}
 	}
 
 	/**
@@ -330,17 +335,28 @@ class FF_Nutshell_Form_Handler {
 			
 			if (!$response['success']) {
 				FF_Nutshell_Core::log('Failed to create lead: ' . json_encode($response));
-				return;
+				return [
+					'success' => false,
+					'error' => 'Failed to create lead',
+					'api_response' => $response
+				];
 			}
 			
-			$lead_id = $response['data']['leads'][0]['id'] ?? null;
+			$lead_payload = $response['data']['leads'][0] ?? [];
+			$lead_id = $lead_payload['id'] ?? null;
+			$lead_number = isset($lead_payload['number']) ? intval($lead_payload['number']) : null;
+			$lead_url = !empty($lead_payload['htmlUrl']) ? $lead_payload['htmlUrl'] : ($lead_number ? ('https://app.nutshell.com/lead/' . $lead_number) : null);
 			
 			if (!$lead_id) {
 				FF_Nutshell_Core::log('Lead created but could not find ID in response');
-				return;
+				return [
+					'success' => false,
+					'error' => 'Lead created but ID missing',
+					'api_response' => $response
+				];
 			}
 			
-			FF_Nutshell_Core::log('Created lead with ID: ' . $lead_id);
+			FF_Nutshell_Core::log('Created lead with ID: ' . $lead_id . ($lead_number ? (' | Number: ' . $lead_number) : ''));
 			
 			// Log the owner assignment status
 			if ($owner_assigned) {
@@ -354,6 +370,7 @@ class FF_Nutshell_Form_Handler {
 				$lead_id = $response['data']['leads'][0]['id'];
 				$stageset_candidate = null;
 				$resolved_stageset_id = null;
+				$resolved_stageset_label = null;
 
 				// Determine candidate based on mapping type
 				if (isset($mapping['stageset_type'])) {
@@ -431,7 +448,21 @@ class FF_Nutshell_Form_Handler {
 				FF_Nutshell_Core::log('Lead creation result: ' . ($response['success'] ? 'SUCCESS' : 'FAILED'));
 			}
 
-			return $response;
+			// Return structured result with key IDs for downstream usage (e.g., FF entry notes)
+			return [
+				'success' => $response['success'],
+				'lead_id' => $lead_id,
+				'lead_number' => $lead_number,
+				'lead_url' => $lead_url,
+				'contact_id' => isset($contact_id) ? $contact_id : null,
+				'account_id' => isset($account_id) ? $account_id : null,
+				'owner_id' => isset($owner_id) ? $owner_id : null,
+				'agent_email' => isset($agent_email) ? $agent_email : null,
+				'agent_name' => isset($agent_name) ? $agent_name : null,
+				'stageset_id' => isset($resolved_stageset_id) ? $resolved_stageset_id : null,
+				'pipeline' => isset($resolved_stageset_label) ? $resolved_stageset_label : null,
+				'api_response' => $response
+			];
 
 		} catch (Exception $e) {
 			FF_Nutshell_Core::log('Exception: ' . $e->getMessage());
@@ -440,6 +471,76 @@ class FF_Nutshell_Form_Handler {
 				'success' => false,
 				'message' => $e->getMessage()
 			];
+		}
+	}
+
+	/**
+	 * Add a note to the Fluent Forms entry with key Nutshell response info
+	 *
+	 * @param int   $entry_id Fluent Forms submission ID
+	 * @param int   $form_id  Form ID
+	 * @param array $result   Result returned by create_lead()
+	 */
+	private function add_submission_note($entry_id, $form_id, $result) {
+		try {
+			if (empty($entry_id) || empty($form_id) || !is_array($result)) {
+				return;
+			}
+
+			$note_lines = [];
+			$note_lines[] = 'Nutshell Lead Created';
+			if (!empty($result['lead_id'])) {
+				$note_lines[] = 'Lead ID: ' . $result['lead_id'];
+			}
+			// Prefer the lower, numeric lead number for display and URL
+			$lead_number = !empty($result['lead_number']) ? intval($result['lead_number']) : null;
+			if ($lead_number) {
+				$note_lines[] = 'Lead Number: ' . $lead_number;
+				$note_lines[] = 'Lead URL: https://app.nutshell.com/lead/' . $lead_number;
+			} elseif (!empty($result['lead_id'])) {
+				// Fallback: try to derive numeric from lead_id like "9460-leads"
+				if (preg_match('/^(\d+)/', (string) $result['lead_id'], $m)) {
+					$note_lines[] = 'Lead URL: https://app.nutshell.com/lead/' . $m[1];
+				}
+			}
+			if (!empty($result['contact_id'])) {
+				$note_lines[] = 'Contact ID: ' . $result['contact_id'];
+			}
+			if (!empty($result['account_id'])) {
+				$note_lines[] = 'Account ID: ' . $result['account_id'];
+			}
+			if (!empty($result['owner_id'])) {
+				$note_lines[] = 'Owner ID: ' . $result['owner_id'];
+			}
+			// Prefer a human-friendly pipeline label when available
+			if (!empty($result['pipeline'])) {
+				$note_lines[] = 'Pipeline: ' . $result['pipeline'];
+			} elseif (!empty($result['stageset_id'])) {
+				$note_lines[] = 'Pipeline: ' . $result['stageset_id'];
+			}
+			if (!empty($result['agent_name']) || !empty($result['agent_email'])) {
+				$agent = !empty($result['agent_name']) ? $result['agent_name'] : $result['agent_email'];
+				$note_lines[] = 'Submitted via agent: ' . $agent;
+			}
+
+			$note = implode("\n- ", $note_lines);
+			if (strpos($note, 'Nutshell Lead Created') === 0) {
+				$note = "- " . $note; // ensure consistent bulleting
+			}
+
+			// Write to Fluent Forms logs (preferred and reliable)
+			do_action('fluentform/log_data', [
+				'parent_source_id' => (int) $form_id,
+				'source_type'      => 'submission_item',
+				'source_id'        => (int) $entry_id,
+				'component'        => 'Nutshell',
+				'status'           => (!empty($result['success']) ? 'success' : 'error'),
+				'title'            => 'Lead Created',
+				'description'      => $note
+			]);
+			FF_Nutshell_Core::log('Added Fluent Forms log entry for entry ID: ' . $entry_id);
+		} catch (\Throwable $e) {
+			FF_Nutshell_Core::log('Error adding submission note: ' . $e->getMessage());
 		}
 	}
 }
